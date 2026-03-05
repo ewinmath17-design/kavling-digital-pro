@@ -1,87 +1,78 @@
-﻿import streamlit as st
-import google.generativeai as genai
-from PIL import Image
+import streamlit as st
+import pandas as pd
 
-# ==========================================
-# 1. KONFIGURASI TAMPILAN PREMIUM
-# ==========================================
-st.set_page_config(page_title="Kavling Digital - Trading Vision", layout="wide", page_icon="📈")
+# Konfigurasi Halaman Utama
+st.set_page_config(page_title="Kavling Digital Pro", page_icon="🦅", layout="wide")
 
-# ==========================================
-# 2. PANEL KONTROL (SIDEBAR)
-# ==========================================
-with st.sidebar:
-    st.image("https://cdn-icons-png.flaticon.com/512/2642/2642503.png", width=80)
-    st.header("⚙️ Command Center")
-    st.markdown("Atur parameter kecerdasan buatan di sini.")
+# Header Aplikasi
+st.title("🦅 Kavling Digital Pro")
+st.markdown("**Asisten Kuantitatif Price Action & Absolute Risk Management**")
+st.divider()
+
+# Layout Kolom
+col1, col2 = st.columns(2)
+
+with col1:
+    st.subheader("⚙️ Parameter Akun & Risiko")
+    balance = st.number_input("Saldo Akun Saat Ini (USD):", min_value=10.0, value=1000.0, step=10.0)
+    risk_percent = st.slider("Batas Risiko per Transaksi (%):", min_value=0.5, max_value=5.0, value=1.0, step=0.5)
     
-    API_KEY = st.text_input("🔑 Gemini API Key:", type="password", help="Kunci akses ke otak AI")
+    st.markdown("---")
+    st.subheader("🎯 Parameter Setup (Price Action)")
+    instrument = st.selectbox("Instrumen:", ["XAUUSD (Gold)", "BTCUSD (Bitcoin)", "Forex Major"])
+    trade_type = st.radio("Arah Eksekusi:", ["BUY (Long)", "SELL (Short)"])
     
-    st.divider()
-    st.subheader("🎯 Parameter Eksekusi")
-    # Fitur Dinamis: User bisa ganti Risk/Reward kapan saja
-    rr_ratio = st.selectbox("Risk:Reward Ratio Target", ["1:1 (Agresif)", "1:1.5 (Moderat)", "1:2 (Standar)", "1:3 (Swing)"], index=2)
+    entry_price = st.number_input("Harga Entry:", format="%.2f")
+    stop_loss = st.number_input("Harga Stop Loss (Lantai/Atap Beton):", format="%.2f")
+
+with col2:
+    st.subheader("📊 Analisis & Output Algoritma")
     
-    # Fitur Dinamis: Gaya trading
-    trading_style = st.radio("⏱️ Mode Trading", ["Scalping (Cepat)", "Day Trading (Harian)", "Swing Trading (Santai)"], index=0)
-    
-    st.divider()
-    st.caption("Sistem beroperasi pada prototipe gratis tanpa komersialisasi API. Powered by Gemini Flash.")
+    if st.button("Hitung Parameter Eksekusi", type="primary"):
+        if entry_price == 0 or stop_loss == 0:
+            st.warning("⚠️ Masukkan Harga Entry dan Stop Loss terlebih dahulu!")
+        elif entry_price == stop_loss:
+            st.error("❌ Harga Entry dan Stop Loss tidak boleh sama.")
+        else:
+            # Kalkulasi Jarak SL (Pips/Poin)
+            jarak_sl = abs(entry_price - stop_loss)
+            
+            # Kalkulasi Nilai Risiko dalam USD
+            risk_usd = balance * (risk_percent / 100)
+            
+            # Simulasi Kasar Lot Size (Penyesuaian untuk XAU/BTC)
+            if instrument == "XAUUSD (Gold)":
+                pip_value = 10 # Standar 1 Lot Standard = $10/pip
+                lot_size = risk_usd / (jarak_sl * pip_value)
+            elif instrument == "BTCUSD (Bitcoin)":
+                pip_value = 1 # Asumsi 1 Lot = 1 BTC
+                lot_size = risk_usd / (jarak_sl * pip_value)
+            else:
+                lot_size = risk_usd / (jarak_sl * 10)
 
-# ==========================================
-# 3. AREA KERJA UTAMA
-# ==========================================
-st.title("📈 Kavling Digital: AI Trading Vision Pro")
-st.markdown("Unggah chart Anda untuk analisis teknikal dan manajemen risiko otomatis.")
+            # Kalkulasi Target Profit (Risk:Reward 1:2 dan 1:3)
+            if trade_type == "BUY (Long)":
+                tp_1_2 = entry_price + (jarak_sl * 2)
+                tp_1_3 = entry_price + (jarak_sl * 3)
+            else:
+                tp_1_2 = entry_price - (jarak_sl * 2)
+                tp_1_3 = entry_price - (jarak_sl * 3)
 
-if API_KEY:
-    genai.configure(api_key=API_KEY)
-    model = genai.GenerativeModel('gemini-2.5-flash')
+            # Menampilkan Hasil
+            st.info(f"**Uang yang Direlakan (Absolute Risk):** ${risk_usd:,.2f} ({risk_percent}%)")
+            st.success(f"**Ukuran Lot Maksimal:** {lot_size:.3f} Lot")
+            
+            st.markdown("### 🎯 Rekomendasi Target Profit (TP)")
+            st.write(f"- **TP Minimal (RR 1:2):** {tp_1_2:,.2f} *(Profit: ${risk_usd * 2:,.2f})*")
+            st.write(f"- **TP Optimal (RR 1:3):** {tp_1_3:,.2f} *(Profit: ${risk_usd * 3:,.2f})*")
+            
+            # AI Psychology Guard (Logika Jarak SL)
+            st.markdown("---")
+            st.subheader("🧠 AI Psychology Guard")
+            if (instrument == "XAUUSD (Gold)" and jarak_sl > 5.0) or (instrument == "BTCUSD (Bitcoin)" and jarak_sl > 1000.0):
+                st.error("🚨 **PERINGATAN:** Jarak Stop Loss terlalu lebar! Anda masuk di tengah jalan (No-Trade Zone). Batalkan eksekusi dan tunggu harga retest di Lantai/Atap beton.")
+            else:
+                st.success("✅ **STATUS:** Area Entry Ideal. Stop Loss ketat. Eksekusi diizinkan!")
 
-    uploaded_files = st.file_uploader("Upload Multi-Timeframe Chart (Tarik & Lepas file di sini)", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
-
-    if uploaded_files:
-        images = []
-        # Tampilan grid responsif untuk gambar
-        cols = st.columns(len(uploaded_files))
-        for idx, file in enumerate(uploaded_files):
-            img = Image.open(file)
-            images.append(img)
-            cols[idx].image(img, caption=f"Visual Data {idx+1}", use_column_width="auto")
-
-        if st.button("🚀 Eksekusi Mesin AI", use_container_width=True):
-            with st.spinner(f"Menganalisis market dengan mode {trading_style}..."):
-                
-                trading_prompt = f"""
-                Anda adalah Senior Quant Trader dan Mentor Trading yang sangat disiplin. 
-                Gunakan mode: {trading_style}. Target Risk:Reward adalah {rr_ratio}.
-                Analisis visual chart ini dengan presisi. Perhatikan struktur harga terhadap Moving Average.
-
-                Keluarkan HANYA format markdown ini:
-
-                ### 📊 Analisis Teknikal Terpadu
-                * **Aset & Timeframe:** [Deteksi dari gambar]
-                * **Korelasi Tren:** [Jelaskan korelasi antar timeframe dan posisi harga terhadap MA]
-                
-                ### 🎯 Sistem Eksekusi ({rr_ratio})
-                * **📊 PROBABILITAS WIN:** [0-100%]
-                * **💡 STATUS:** [EKSEKUSI SEKARANG / TAHAN DULU (WAIT) / DILARANG ENTRY]
-                * **ACTION:** [BUY / SELL / WAIT]
-                * **ENTRY PRICE:** [Harga presisi]
-                * **STOP LOSS (SL):** [Tempatkan di swing terdekat]
-                * **TAKE PROFIT (TP):** [Hitung matematis berdasarkan jarak SL dan {rr_ratio}]
-
-                ---
-                ### 🧠 Mentor Insights
-                [Satu paragraf nasihat psikologi trading yang tenang, menyesuaikan dengan probabilitas setup di atas.]
-                """
-                
-                try:
-                    payload = [trading_prompt] + images
-                    response = model.generate_content(payload)
-                    st.success("Sistem Selesai Menganalisis!")
-                    st.markdown(response.text)
-                except Exception as e:
-                    st.error(f"Koneksi terputus: {e}")
-else:
-    st.warning("⚠️ Sistem siaga. Masukkan API Key di Panel Kontrol (sebelah kiri) untuk memulai.")
+st.divider()
+st.caption("Kavling Digital Pro v1.0 - Built by System Architect & AI")
