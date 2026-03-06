@@ -8,7 +8,6 @@ import plotly.graph_objects as go
 # ==========================================
 st.set_page_config(page_title="Kavling Digital Pro", page_icon="🦅", layout="centered")
 
-# CSS Custom untuk mempercantik tampilan peringatan AI
 st.markdown("""
 <style>
 .ai-guard-safe {background-color: #d4edda; color: #155724; padding: 15px; border-radius: 10px; border-left: 5px solid #28a745;}
@@ -29,9 +28,13 @@ def detect_support_resistance(df, window=20):
     return df
 
 # ==========================================
-# PENGATURAN TERSEMBUNYI (Hemat Layar HP)
+# PENGATURAN TERSEMBUNYI (Kalibrasi Broker & Modal)
 # ==========================================
-with st.expander("⚙️ Pengaturan Modal & Risiko (Klik untuk Buka)"):
+with st.expander("⚙️ Kalibrasi Broker, Modal & Risiko (Klik untuk Buka)"):
+    st.markdown("**Kalibrasi Harga (Sync dengan MT5):**")
+    broker_offset = st.number_input("⚖️ Geser Harga (Contoh: Jika App lebih tinggi $5, isi -5):", value=0.0, step=0.5)
+    
+    st.markdown("---")
     balance = st.number_input("💰 Saldo Akun (USD):", min_value=10.0, value=100.0, step=10.0)
     risk_percent = st.slider("🛡️ Batas Risiko per Trade (%):", min_value=0.5, max_value=5.0, value=1.0, step=0.5)
 
@@ -41,29 +44,32 @@ with st.expander("⚙️ Pengaturan Modal & Risiko (Klik untuk Buka)"):
 st.subheader("📡 Radar Pasar Live")
 col_a, col_b = st.columns(2)
 with col_a:
-    ticker_symbol = st.selectbox("Instrumen:", ["XAUUSD (Emas)", "BTCUSD (Crypto)"])
+    ticker_symbol = st.selectbox("Instrumen:", ["XAUUSD (Emas Spot)", "BTCUSD (Crypto)"])
 with col_b:
     timeframe = st.selectbox("Timeframe:", ["5m", "15m", "30m", "1h"], index=1)
 
-# ==========================================
-# TOMBOL SINKRONISASI MANUAL & PENARIK DATA CEPAT
-# ==========================================
+# TOMBOL SINKRONISASI MANUAL
 if st.button("🔄 Sinkronkan Data Harga Sekarang", use_container_width=True):
-    st.cache_data.clear() # Memaksa sistem membuang data lama
+    st.cache_data.clear()
 
-# Tarik Data Live (Dipercepat menjadi 5 detik Cache)
+# Tarik Data Live 
 @st.cache_data(ttl=5)
 def load_data(ticker, interval):
     period = "5d" if interval in ["5m", "15m", "30m"] else "1mo"
-    # Mengambil data langsung tanpa delay timezone
     df = yf.download(ticker, period=period, interval=interval, progress=False, ignore_tz=True)
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.droplevel(1)
     df.dropna(inplace=True)
     return df
 
-ticker_code = "GC=F" if "XAUUSD" in ticker_symbol else "BTC-USD"
+# Menggunakan ticker SPOT GOLD (XAUUSD=X) agar lebih mirip MT5
+ticker_code = "XAUUSD=X" if "XAUUSD" in ticker_symbol else "BTC-USD"
 df = load_data(ticker_code, timeframe)
+
+# MENERAPKAN KALIBRASI BROKER KE SEMUA DATA CHART
+if broker_offset != 0.0:
+    df[['Open', 'High', 'Low', 'Close']] = df[['Open', 'High', 'Low', 'Close']] + broker_offset
+
 df = detect_support_resistance(df)
 
 current_price = float(df['Close'].iloc[-1])
@@ -73,7 +79,7 @@ current_resistance = float(df['Resistance'].iloc[-1])
 # Info Harga Ringkas
 st.info(f"🏷️ **Harga Saat Ini:** ${current_price:,.2f} | 🟢 **Lantai:** ${current_support:,.2f} | 🔴 **Atap:** ${current_resistance:,.2f}")
 
-# Chart Interaktif yang disesuaikan untuk HP
+# Chart Interaktif
 fig = go.Figure(data=[go.Candlestick(x=df.index,
                 open=df['Open'], high=df['High'],
                 low=df['Low'], close=df['Close'],
@@ -122,7 +128,6 @@ if st.button("🚀 Hitung & Cek Validasi AI", use_container_width=True):
         st.divider()
         st.markdown("### 🧠 Keputusan AI Guard:")
         
-        # Logika AI Guard Mark Douglas
         range_total = abs(current_resistance - current_support)
         if range_total > 0:
             batas_bawah = current_support + (range_total * 0.3)
